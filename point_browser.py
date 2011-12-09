@@ -24,18 +24,33 @@ from matplotlib.widgets import Button, RadioButtons
 class PointBrowser:
   """
   PointBroswer allows to manually add or remove points in a 2D image
+    image  ... 2D Array for background image
+    imginfo... dictionary with parameters of the image, required:
+               'desc'     ... image description (default: '')
+               'filename' ... filename of the image (default: '')
+               'xperchan' ... scaling for x-axis (default: 1)
+               'yperchan' ... scaling for y-axis (default: 1)
+               'xunit'    ... unit for x-axis (default: 'px')
+               'yunit'    ... unit for y-axis (default: 'px')
+               'atom'     ... atom species (default: 'C')
+    points ... initial list of peak positions shape(N,2)
+    verbosity. (opt) quiet (0), verbose (3), debug (4)
   """
 
-  def __init__(self,image,points,verbosity=0,title=None):
+  def __init__(self,image,imginfo,points,verbosity=0):
     
-    self.image = np.asarray(image);
-    self.points= np.asarray(points);
+    self.image  = np.asarray(image);
+    # set default values for imginfo
+    self.imginfo= {'desc': "", 'filename':"", 'atom':'C', \
+                   'xperchan':1, 'yperchan':1, 'xunit':'px', 'yunit':'px'};
+    self.imginfo.update(imginfo);
+    self.points = np.asarray(points);
     assert( self.points.ndim==2 and self.points.shape[1]==2 );
     self.verbosity=verbosity;
         
     # open new figure with buttons
     fig = plt.figure(); self.fig = fig; 
-    if title is not None: plt.title(title);
+    plt.title(self.imginfo['desc']);
     self.axis = fig.add_subplot(111); 
     self.fig.subplots_adjust(right=0.85);
     self.AxesImage = self.axis.imshow(self.image,cmap=plt.gray());
@@ -98,7 +113,7 @@ class PointBrowser:
 
     x = event.mouseevent.xdata
     y = event.mouseevent.ydata
-    if self.verbosity>3: print x,y,event.agent;
+    if self.verbosity>3: print x,y,event.artist;
 
     # 1. Right mouse click: remove point
     if event.mouseevent.button==3:
@@ -123,26 +138,64 @@ class PointBrowser:
 
   def Save(self,event):
     import tkFileDialog
-    filename = tkFileDialog.asksaveasfilename();
+    filename = tkFileDialog.asksaveasfilename(
+         filetypes=(('Text File','*.txt'),
+                    ('XYZ File', '*.xyz')));
     if not filename: return;
+    ext = filename.split('.')[-1];
     try:
-      # TODO: add header
-      np.savetxt(filename,self.points);
       if self.verbosity>1: print("SAVING point list to file '%s'" % filename)
+      if ext=='txt':
+        # TODO: add header
+        np.savetxt(filename,self.points);
+      elif ext=='xyz':
+        OUT=open(filename,'w');
+        # header of xyz file
+        OUT.write("%d\n"%len(self.points));
+        OUT.write("Point positions in %s for image '%s'\n" \
+            %(self.imginfo['xunit'],self.imginfo['filename']));
+        # data for xyz file (in image coordinates)
+        for x,y in self.points:
+          x,y = self.__px2ic(x,y);
+          OUT.write("%2s  %8f  %8f  0.000000\n" % (self.imginfo['atom'], x, y));
+        OUT.close();
     except:
-      print("ERROR: could not write point list to file '%s'" % filename);
+      from tkMessageBox import showerror
+      showerror("Save error", "Could not write point list to file '%s'" % filename);
+      raise
 
 
   def Load(self,event):
+    """
+    supported file formats: 
+      *.txt:  list of x,y positions in pixels
+      *.xyz:  absolute coordinates
+    """
     import tkFileDialog
-    filename = tkFileDialog.askopenfilename();
+    filename = tkFileDialog.askopenfilename(
+         filetypes=(('Text File','*.txt'),
+                    ("XYZ file", "*.xyz")));
     if not filename: return;
+    ext = filename.split('.')[-1];
     try:
-      self.points=np.genfromtxt(filename);
-      if self.verbosity>1: print("LOADING point list from file '%s'" % filename);
+      if self.verbosity>1: print("LOADING point list from file '%s'" % filename);    
+      if ext=='txt':
+        self.points=np.genfromtxt(filename,dtype=float);
+      elif ext=='xyz':
+        pts=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
+        self.points=np.asarray(self.__ic2px(pts[:,0],pts[:,1])).T;
     except:
       print("ERROR: could not read point list from file '%s'" % filename);
+      raise
     self.__update();
+
+  def __ic2px(self,x,y):
+    "convert image coordinates to pixel positions"
+    return (x/self.imginfo['xperchan'], y/self.imginfo['yperchan']);
+
+  def __px2ic(self,x,y):
+    "convert pixel positions to image coordinates"
+    return (x*self.imginfo['xperchan'], y*self.imginfo['yperchan']);
 
   def Dual(self,event):
     """
@@ -154,7 +207,8 @@ class PointBrowser:
     dual = [];
     for edges in tri.vertices:
       dual.append(np.mean(self.points[edges],axis=0));
-    self.dualInstance = PointBrowser(self.image, dual);
+    info=self.imginfo.copy(); info['desc']+=", dual points";
+    self.dualInstance = PointBrowser(self.image, info, dual);
 
 
 # --- self-test -------------------------------------------------------------
@@ -163,6 +217,7 @@ if __name__ == '__main__':
   x,y = np.ogrid[0.:1.:.01, 0.:1.:.01];
   im  = np.exp(-((x-0.5)**2+(y-0.3)**2)/0.2);
   pt  = np.random.rand(100, 2)*100;
-  PB=PointBrowser(im,pt,verbosity=3);
+  info= {'desc':'Test Image','xperchan': 0.1};
+  PB=PointBrowser(im,info,pt,verbosity=4);
 
 
