@@ -21,62 +21,54 @@ import numpy as np
 import matplotlib.pylab as plt
 from matplotlib.widgets import Button, RadioButtons
 
-class PointBrowser:
+class ImageBrowser(object):
   """
-  PointBroswer allows to manually add or remove points in a 2D image
+  ImageBrowser shows a grayscale image in a separate window
+  """
+
+  def __init__(self,image,imginfo={},fnext=None,verbosity=0):
+    """
     image  ... 2D Array for background image
-    imginfo... dictionary with parameters of the image, required:
+    imginfo... (opt) dictionary with parameters of the image:
                'desc'     ... image description (default: '')
                'filename' ... filename of the image (default: '')
                'xperchan' ... scaling for x-axis (default: 1)
                'yperchan' ... scaling for y-axis (default: 1)
-               'xunit'    ... unit for x-axis (default: 'px')
-               'yunit'    ... unit for y-axis (default: 'px')
-               'atom'     ... atom species (default: 'C')
-    points ... initial list of peak positions shape(N,2)
+               'xunits'   ... unit for x-axis (default: 'px')
+               'yunits'   ... unit for y-axis (default: 'px')
+               'atom'     ... atom species (default: 'C') 
+    fnext  ... (opt) function connected to the Next-Button
     verbosity. (opt) quiet (0), verbose (3), debug (4)
-  """
+    """
 
-  def __init__(self,image,imginfo,points,verbosity=0):
-    
     self.image  = np.asarray(image);
+    self.verbosity=verbosity;
+
     # set default values for imginfo
     self.imginfo= {'desc': "", 'filename':"", 'atom':'C', \
-                   'xperchan':1, 'yperchan':1, 'xunit':'px', 'yunit':'px'};
+                   'xperchan':1., 'yperchan':1., 'xunits':'px', 'yunits':'px'};
     self.imginfo.update(imginfo);
-    self.points = np.asarray(points);
-    assert( self.points.ndim==2 and self.points.shape[1]==2 );
-    self.verbosity=verbosity;
+    self.imginfo['extent'] = [0, self.image.shape[0]*self.imginfo['xperchan'],\
+                              self.image.shape[1]*self.imginfo['yperchan'],0];
         
-    # open new figure with buttons
-    fig = plt.figure(); self.fig = fig; 
-    plt.title(self.imginfo['desc']);
-    self.axis = fig.add_subplot(111); 
+    # open new figure and draw image
+    fig = plt.figure(); self.fig = fig;
+    self.axis = self.fig.add_subplot(111); 
     self.fig.subplots_adjust(right=0.85);
-    self.AxesImage = self.axis.imshow(self.image,cmap=plt.gray());
-    self.Line2D,   = self.axis.plot(self.points[:,0], self.points[:,1],'ro',picker=5);
-    self.axis.set_xlim(0,self.image.shape[0]-1);
-    self.axis.set_ylim(self.image.shape[1]-1,0);
-
+    self.AxesImage=None;
+    self.axis.set_title('ImageBrowser: %s' % self.imginfo['desc']);
+    self._update_image(); 
+   
     # add buttons
     axStyle = fig.add_axes([0.85, 0.1, 0.1, 0.08]);
-    axEdit  = fig.add_axes([0.85, 0.85,0.1, 0.04]);
-    axSave  = fig.add_axes([0.85, 0.8, 0.1, 0.04]);
-    axLoad  = fig.add_axes([0.85, 0.75,0.1, 0.04]);
-    axDual  = fig.add_axes([0.85, 0.7, 0.1, 0.04]);
     self.rbStyle = RadioButtons(axStyle,["blur","raw"]);
-    self.bEdit   = Button(axEdit,'Edit');
-    self.bSave   = Button(axSave,'Save');
-    self.bLoad   = Button(axLoad,'Load');
-    self.bDual   = Button(axDual,'Dual');
     self.rbStyle.on_clicked(self.ChangeStyle);
-    self.bEdit.on_clicked(self.ToggleEdit);
-    self.bSave.on_clicked(self.Save);
-    self.bLoad.on_clicked(self.Load);
-    self.bDual.on_clicked(self.Dual);
+    if fnext is not None:
+      axNext  = self.fig.add_axes([0.85, 0.2, 0.1, 0.04]);    
+      self.bNext   = Button(axDual,'Next');
+      self.bDual.on_clicked(fnext);
 
-    plt.show();
-    
+
   def ChangeStyle(self,label):
     """ 
     Change style of background image 
@@ -85,7 +77,72 @@ class PointBrowser:
       self.AxesImage.set_interpolation("nearest");
     elif label=="blur":
       self.AxesImage.set_interpolation("bilinear");
+    self._update();
+
+
+  def _update_image(self):
+    " redraw image "
+    if self.AxesImage is not None: self.AxesImage.remove();
+    self.AxesImage = self.axis.imshow(self.image,cmap=plt.gray(),\
+                     aspect='equal',extent=self.imginfo['extent']);
+    self.axis.set_xlabel("x [%s]" % self.imginfo['xunits']);
+    self.axis.set_ylabel("y [%s]" % self.imginfo['yunits']);
+    self._update();
+
+  def _update(self):
     plt.draw();
+
+  def _ic2px(self,x,y):
+    "convert image coordinates to pixel positions"
+    return (x/self.imginfo['xperchan'], y/self.imginfo['yperchan']);
+
+  def _px2ic(self,x,y):
+    "convert pixel positions to image coordinates"
+    return (x*self.imginfo['xperchan'], y*self.imginfo['yperchan']);
+
+
+
+
+
+class PointBrowser(ImageBrowser):
+  """
+  PointBroswer allows to manually add or remove points in a 2D image
+  """
+
+  def __init__(self,image,points,imginfo={},fnext=None,verbosity=0):
+    """
+    image  ... 2D Array for background image
+    points ... initial list of peak positions shape(N,2)
+    imginfo... (opt) dictionary with image parameters (see ImageBrowser)
+    self.bDual.on_clicked(self.Dual);
+    verbosity. (opt) quiet (0), verbose (3), debug (4)
+    """
+
+    # init ImageBrowser
+    super(PointBrowser,self).__init__(image,imginfo,fnext,verbosity);
+    self.axis.set_title('PointBrowser: %s' % self.imginfo['desc']);
+
+    # draw point list
+    self.points = np.asarray(points);
+    assert( self.points.ndim==2 and self.points.shape[1]==2 );
+    self.Line2D, = self.axis.plot(self.points[:,0], self.points[:,1],\
+                    'ro',picker=5);
+    self.axis.set_xlim(*self.imginfo['extent'][0:2]);
+    self.axis.set_ylim(*self.imginfo['extent'][2:4]);
+
+    # add buttons
+    axEdit  = self.fig.add_axes([0.85, 0.85,0.1, 0.04]);
+    axSave  = self.fig.add_axes([0.85, 0.8, 0.1, 0.04]);
+    axLoad  = self.fig.add_axes([0.85, 0.75,0.1, 0.04]);
+    self.bEdit   = Button(axEdit,'Edit');
+    self.bSave   = Button(axSave,'Save');
+    self.bLoad   = Button(axLoad,'Load');
+    self.bEdit.on_clicked(self.ToggleEdit);
+    self.bSave.on_clicked(self.Save);
+    self.bLoad.on_clicked(self.Load);
+
+    self._update();
+    
 
   def ToggleEdit(self,event):
     """ 
@@ -102,7 +159,8 @@ class PointBrowser:
       self.bEdit.label.set_text('Edit');
       self.axis.set_picker(False);
       self.fig.canvas.mpl_disconnect(self.cid_ToggleEdit);
-    plt.draw();
+    self._update();
+
 
   def __onpick(self,event):
     """
@@ -129,12 +187,12 @@ class PointBrowser:
         print "ADD point at: ", [x,y]
       self.points=np.append(self.points,[[x,y]],axis=0);
 
-    self.__update();
+    self._update_points();
 
     
-  def __update(self):
+  def _update_points(self):
     self.Line2D.set_data(self.points.T);
-    plt.draw();
+    self._update();
 
   def Save(self,event):
     import tkFileDialog
@@ -152,18 +210,17 @@ class PointBrowser:
         OUT=open(filename,'w');
         # header of xyz file
         OUT.write("%d\n"%len(self.points));
-        OUT.write("Point positions in %s for image '%s'\n" \
-            %(self.imginfo['xunit'],self.imginfo['filename']));
+        OUT.write("Point positions in (%s,%s) for image '%s'\n" \
+            %(self.imginfo['xunits'],self.imginfo['yunits'],    \
+              self.imginfo['filename']));
         # data for xyz file (in image coordinates)
         for x,y in self.points:
-          x,y = self.__px2ic(x,y);
+          x,y = self._px2ic(x,y);
           OUT.write("%2s  %8f  %8f  0.000000\n" % (self.imginfo['atom'], x, y));
         OUT.close();
     except:
       from tkMessageBox import showerror
       showerror("Save error", "Could not write point list to file '%s'" % filename);
-      raise
-
 
   def Load(self,event):
     """
@@ -183,41 +240,27 @@ class PointBrowser:
         self.points=np.genfromtxt(filename,dtype=float);
       elif ext=='xyz':
         pts=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
-        self.points=np.asarray(self.__ic2px(pts[:,0],pts[:,1])).T;
+        self.points=np.asarray(self._ic2px(pts[:,0],pts[:,1])).T;
     except:
-      print("ERROR: could not read point list from file '%s'" % filename);
-      raise
-    self.__update();
+      from tkMessageBox import showerror
+      showerror("Load error", "could not read point list from file '%s'" % filename);
+    self._update_points();
 
-  def __ic2px(self,x,y):
-    "convert image coordinates to pixel positions"
-    return (x/self.imginfo['xperchan'], y/self.imginfo['yperchan']);
 
-  def __px2ic(self,x,y):
-    "convert pixel positions to image coordinates"
-    return (x*self.imginfo['xperchan'], y*self.imginfo['yperchan']);
-
-  def Dual(self,event):
-    """
-    Raise new instance with dual points generated from the centers 
-    of a Delaunay-triangulation
-    """
-    from scipy.spatial import Delaunay
-    tri = Delaunay(self.points);
-    dual = [];
-    for edges in tri.vertices:
-      dual.append(np.mean(self.points[edges],axis=0));
-    info=self.imginfo.copy(); info['desc']+=", dual points";
-    self.dualInstance = PointBrowser(self.image, info, dual);
 
 
 # --- self-test -------------------------------------------------------------
 if __name__ == '__main__':
 
-  x,y = np.ogrid[0.:1.:.01, 0.:1.:.01];
+  # ImageBrowser
+  x,y = np.ogrid[0.:.5:.01, 0.:1.:.01];
   im  = np.exp(-((x-0.5)**2+(y-0.3)**2)/0.2);
-  pt  = np.random.rand(100, 2)*100;
-  info= {'desc':'Test Image','xperchan': 0.1};
-  PB=PointBrowser(im,info,pt,verbosity=4);
+  info= {'desc':'Test Image','xperchan': 2};
+  #IB =ImageBrowser(im,info,verbosity=4);
+  
+  # PointBrowser
+  pt  = np.random.rand(100, 2)*110; pt[0,:]=0
+  PB=PointBrowser(im,pt,info,verbosity=4);
 
+  plt.show();
 

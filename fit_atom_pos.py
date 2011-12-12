@@ -2,7 +2,8 @@
 #
 # 1. Fourier Filtering
 # 2. Peak Fitting using HyperSpy
-# 3. Delaunay Triangulation + Inversion to find Atom Positions
+# 3. Delaunay Triangulation 
+# 4. Generate Atom Positions from Dual Graph
 
 import numpy as np
 import hyperspy;
@@ -37,3 +38,18 @@ info = { 'desc':     IN.mapped_parameters.title,
          'yunit'   : a[1].units,
          'atoms'   : 'C' };
 pb.PointBrowser(IN.data,info,center);
+
+
+# 3. Dual
+def Dual(p):
+  """
+  Raise new instance with dual points generated from the centers 
+  of a Delaunay-triangulation
+  """
+  from scipy.spatial import Delaunay
+  tri = Delaunay(self.points);
+  dual = [];
+  for edges in tri.vertices:
+    dual.append(np.mean(self.points[edges],axis=0));
+  info=self.imginfo.copy(); info['desc']+=", dual points";
+  self.dualInstance = PointBrowser(self.image, info, dual);
