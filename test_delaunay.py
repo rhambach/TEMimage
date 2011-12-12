@@ -17,6 +17,22 @@ import numpy as np;
 import matplotlib.pylab as plt;
 from scipy.spatial import Delaunay;
 
+class Tile:
+  " Represents a single polygon in a tiling "
+  
+  def __init__(self,vertices):
+    " vertices... list(nvertices) of point indices "
+    self.nvertices = len(vertices);
+    self.vertices  = list(vertices);  
+
+  def get_edges(self):
+    " return list(nedges,2) of point indices for edges "
+    edges=zip[self.vertices[:-1],self.vertices[1:]];
+    edges.append([self.vertices[-1],self.vertices[0]]);
+    return edges;
+
+
+
 class Voronoi:
   
   def __init__(self,tri):
@@ -53,7 +69,7 @@ if __name__ == '__main__':
   plt.gcf().clear();
 
   # Delaunay
-  points = np.genfromtxt("test.txt");
+  points = np.genfromtxt("test.txt",dtype=float);
   tri = Delaunay(points);
   #plt.plot(tri.points[:,0],tri.points[:,1],'bo');
 
