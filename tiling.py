@@ -106,7 +106,15 @@ class Tiling:
     return Tiling(dpoints, dvertices, dneighbors, dedges);
 
   def flip(self, edge):
-    " flip commen edge between two triangles (flips point coordinates)"
+    """
+    flip commen edge between two triangles (flips point coordinates)
+                         edge:          p1, p2
+          A    p1  B     tile:          t1=(p1,p2,e1), t2=(p1,p2,e2)
+             / | \       neighbors:     n1=(t2,A,D),   n2=(t1,B,C)
+          e1 ..... e2    new_edge:      e1, e2
+             \ | /       new_tile:      t1=(e1,e2,p1), t2=(e1,e2,p2)
+          D    p2  C     new_neighobrs: n1=(t2,A,B),   n2=(t1,D,C)
+    """
 
     p1,p2 = self.edges[edge];
 
@@ -118,17 +126,32 @@ class Tiling:
       index = (v==p1) | (v==p2); # boolean index array 
       if index.sum()==2:         # edge is part of tile t
         tiles.append(t); 
-        new_edge.append(v[~index][0]);
-    if len(tiles)<>2: return;    # edge is not part of two triangles
+        new_edge.append(v[~index][0]);  # -> e1, e2
+    if len(tiles)<>2: 
+      if self.verbosity>3: print "FLIP: edge is not part of two triangles";
+      return;
+    t1,t2 = tiles; e1,e2 = new_edge;
 
-    # reconstruct tiles
-    self.vertices[tiles[0]] = self.sort_clockwise(new_edge+[p1,]);
-    self.vertices[tiles[1]] = self.sort_clockwise(new_edge+[p2,]);
+    # new neighbors
+    for n in self.neighbors[t1]:
+      if p2 not in self.vertices[n]: A=n;
+      if p1 not in self.vertices[n]: D=n;
+    for n in self.neighbors[t2]:
+      if p2 not in self.vertices[n]: B=n;
+      if p1 not in self.vertices[n]: C=n;
+    print self.neighbors[t1];
+    self.neighbors[t1] = [t2,A,B];
+    self.neighbors[t2] = [t1,C,D];
+    print self.neighbors[t1];
 
-    # correct edges
-    self.edges[edge] = new_edge;
+    # new tiles (e1,e2,p1), (e1,e2,p2)
+    self.vertices[t1] = self.sort_clockwise([e1,e2,p1]);
+    self.vertices[t2] = self.sort_clockwise([e1,e2,p2]);
 
-    # correct neighbors (todo)
+    # new edge
+    self.edges[edge] = [e1,e2];
+
+    
 
 
   def plot_vertices(self, ax=None, fc='red'):
