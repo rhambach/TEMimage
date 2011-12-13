@@ -2,7 +2,7 @@
    Tiling of 2D space and its dual graph (Delaunay triangulation and Voronoi diagram)
 
    VERSION
-     $Id: dp_mdf.py 1604 2011-11-15 13:04:35Z hambach $
+     $Id$
 
    USAGE
      An example can be found at the end of this file and can be executed
@@ -13,9 +13,9 @@
      Use of this source code is governed by a BSD-style license that 
      can be found in the LICENSE file.
 """
-__version__ = "$Revision: 367 $"
+__version__ = "$Revision$"
 __author__ = "Ralf Hambach"
-__date__ = "$Date: 2011-11-15 13:58:13 +0100 (Tue, 15 Nov 2011) $"
+__date__ = "$Date$"
 
 
 import numpy as np;
