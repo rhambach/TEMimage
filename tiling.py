@@ -79,7 +79,9 @@ class Tiling:
      return the dual graph of the tiling, which is constructed
       by mapping tile -> point of mass, points -> tiles
     """
-    dpoints = []; dedges = []; dneighbors = []; dvertices = [];
+    dpoints = []; dedges = []; 
+    dneighbors = [[] for i in range(self.npoints)];
+    dvertices  = [[] for i in range(self.npoints)];
 
     for t in range(self.ntiles):
       # center of mass for each polygon (dual to Delaunay face)
@@ -87,19 +89,23 @@ class Tiling:
       # new edges connecting center of mass for all neighboring polygons
       for n in self.neighbors[t]:
         if 0<=n<t: dedges.append([t, n]); # avoid double counting
+      # vertices of tile t <-> new tiles that have center of t as vertex
+      for v in self.vertices[t]:
+          dvertices[v].append(t); 
 
-    for p in range(self.npoints):
-      # new neighbors are connected via an edge with t
-      t,n = np.where(self.edges == p);
-      dneighbors.append(self.edges[t,n-1]); # end point of edges starting from p
+    #for p in range(self.npoints):
+    #  # new neighbors are connected via an edge with t
+    #  t,n = np.where(self.edges == p);
+    #  dneighbors.append(self.edges[t,n-1]); # end point of edges starting from p
 
-      # vertices of new tile are centers of all old tiles that include p
-      v=[];
-      for t in range(self.ntiles):
-         if p in self.vertices[t]: v.append(t);  
-      dvertices.append(np.asarray(v));
+    # new neighbors are connected via an edge with t
+    for i,j in self.edges:
+      dneighbors[i].append(j);
+      dneighbors[j].append(i);
 
     return Tiling(dpoints, dvertices, dneighbors, dedges);
+
+
 
   def plot_vertices(self, ax=None, fc='red'):
     " plot points using matplotlib "
@@ -116,7 +122,7 @@ class Tiling:
     ax.add_collection(lc);
     return ax;
 
-  def plot_tiles(self, ax=None, nvertices=None, fc='blue'):
+  def plot_tiles(self, ax=None, nvertices=None, fc='blue', alpha=0.5):
     " plot tiles "
     if ax is None: plt.figure(); ax=plt.subplot(111);
     # sort tiles according to their number of vertices
@@ -132,7 +138,7 @@ class Tiling:
     for n in nvertices:
       if n>N: continue;
       x,y = zip(*(tileN[n]));
-      plt.fill(x,y, facecolor=fc, alpha=0.5, edgecolor='none');
+      ax.fill(x,y, facecolor=fc, alpha=alpha, edgecolor='none');
 
     return ax;
 

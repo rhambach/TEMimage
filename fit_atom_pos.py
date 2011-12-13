@@ -11,9 +11,12 @@ from hyperspy.hspy          import load
 from hyperspy.peak_char     import two_dim_findpeaks
 from hyperspy.drawing.image import plot_image_peaks
 import point_browser as pb
+from tiling import *
 
-infile="tests/graphene_flower_filtered.dm3";
+infile="tests/graphene_defect_filtered.dm3";
+rawfile="tests/graphene_defect_raw.dm3";
 IN = load(infile);
+INRAW=load(rawfile);
 
 # 1. Fourier Filtering for graphene (ring filter)
 # Todo
@@ -29,7 +32,7 @@ peaks=two_dim_findpeaks(data,peak_width=10);
 center,height = peaks[:,0:2], peaks[:,2];
 
 # 3. Start Point Browser
-a=IN.axes_manager.axes;
+a=IN.axes_manager.axes; 
 info = { 'desc':     IN.mapped_parameters.title,
          'filename': infile,
          'xperchan': a[0].scale,
@@ -37,19 +40,29 @@ info = { 'desc':     IN.mapped_parameters.title,
          'xunit'   : a[0].units,
          'yunit'   : a[1].units,
          'atoms'   : 'C' };
-pb.PointBrowser(IN.data,info,center);
+# convert peak positions from px -> unit
+center *= [a[0].scale, a[1].scale];
 
 
 # 3. Dual
-def Dual(p):
+def Dual(event):
   """
   Raise new instance with dual points generated from the centers 
   of a Delaunay-triangulation
   """
-  from scipy.spatial import Delaunay
-  tri = Delaunay(self.points);
-  dual = [];
-  for edges in tri.vertices:
-    dual.append(np.mean(self.points[edges],axis=0));
-  info=self.imginfo.copy(); info['desc']+=", dual points";
-  self.dualInstance = PointBrowser(self.image, info, dual);
+  Centers=Tiling(PBcenter.points);
+  Atoms  =Centers.get_dual();
+  info   =PBcenter.imginfo.copy(); 
+  info['desc']=INRAW.mapped_parameters.title+", dual points";
+  #PBatoms=pb.PointBrowser(IN.data,Atoms.points,info);
+  PBimage=pb.ImageBrowser(INRAW.data,info);
+  ax=Atoms.plot_edges(PBimage.axis,fc='darkgray');
+  Atoms.plot_tiles(ax,nvertices=[5],fc='green',alpha=0.3);
+  Atoms.plot_tiles(ax,nvertices=[7],fc='blue',alpha=0.2);
+  Atoms.plot_tiles(ax,nvertices=[1,2,3,4,8,9,10],fc='red');
+
+  plt.show();
+
+
+PBcenter=pb.PointBrowser(IN.data,center,info,fnext=Dual);
+plt.show();
