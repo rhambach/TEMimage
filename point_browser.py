@@ -65,8 +65,8 @@ class ImageBrowser(object):
     self.rbStyle.on_clicked(self.ChangeStyle);
     if fnext is not None:
       axNext  = self.fig.add_axes([0.85, 0.2, 0.1, 0.04]);    
-      self.bNext   = Button(axDual,'Next');
-      self.bDual.on_clicked(fnext);
+      self.bNext   = Button(axNext,'Next');
+      self.bNext.on_clicked(fnext);
 
 
   def ChangeStyle(self,label):
@@ -246,6 +246,15 @@ class PointBrowser(ImageBrowser):
       showerror("Load error", "could not read point list from file '%s'" % filename);
     self._update_points();
 
+
+
+
+
+
+#class TilingBrowser(ImageBrowser):
+#  """
+#  TilingBroswer allows to manually add or remove lines in a 2D image
+#  """
 
 
 
