@@ -105,6 +105,30 @@ class Tiling:
 
     return Tiling(dpoints, dvertices, dneighbors, dedges);
 
+  def flip(self, edge):
+    " flip commen edge between two triangles (flips point coordinates)"
+
+    p1,p2 = self.edges[edge];
+
+    # find the two tiles that contain both vertices of the edge
+    tiles=[]; new_edge=[]
+    for t in range(self.ntiles):
+      v     = self.vertices[t];
+      if len(v)!= 3: continue;   # only consider triangles
+      index = (v==p1) | (v==p2); # boolean index array 
+      if index.sum()==2:         # edge is part of tile t
+        tiles.append(t); 
+        new_edge.append(v[~index][0]);
+    if len(tiles)<>2: return;    # edge is not part of two triangles
+
+    # reconstruct tiles
+    self.vertices[tiles[0]] = self.sort_clockwise(new_edge+[p1,]);
+    self.vertices[tiles[1]] = self.sort_clockwise(new_edge+[p2,]);
+
+    # correct edges
+    self.edges[edge] = new_edge;
+
+    # correct neighbors (todo)
 
 
   def plot_vertices(self, ax=None, fc='red'):
