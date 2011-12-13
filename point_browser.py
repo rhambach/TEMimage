@@ -37,7 +37,7 @@ class ImageBrowser(object):
                'xunits'   ... unit for x-axis (default: 'px')
                'yunits'   ... unit for y-axis (default: 'px')
                'atom'     ... atom species (default: 'C') 
-    fnext  ... (opt) function connected to the Next-Button
+    fnext  ... (opt) function(self,event) connected to the Next-button
     verbosity. (opt) quiet (0), verbose (3), debug (4)
     """
 
@@ -66,7 +66,7 @@ class ImageBrowser(object):
     if fnext is not None:
       axNext  = self.fig.add_axes([0.85, 0.2, 0.1, 0.04]);    
       self.bNext   = Button(axNext,'Next');
-      self.bNext.on_clicked(fnext);
+      self.bNext.on_clicked(lambda *args: fnext(self,*args));
 
 
   def ChangeStyle(self,label):
@@ -248,13 +248,142 @@ class PointBrowser(ImageBrowser):
 
 
 
+class TilingBrowser(ImageBrowser):
+  """
+  TilingBroswer allows to manually add or remove lines in a 2D image
+  """
+
+  def __init__(self,image,tiling,imginfo={},fnext=None,verbosity=0):
+    """
+    image  ... 2D Array for background image
+    tiling ... Tiling instance
+    imginfo... (opt) dictionary with image parameters (see ImageBrowser)
+    self.bDual.on_clicked(self.Dual);
+    verbosity. (opt) quiet (0), verbose (3), debug (4)
+    """
+    import matplotlib.collections as c;
+
+    # init ImageBrowser
+    super(TilingBrowser,self).__init__(image,imginfo,fnext,verbosity);
+    self.axis.set_title('TilingBrowser: %s' % self.imginfo['desc']);
+    
+    # draw edges
+    self.tiling= tiling;
+    segments = [self.tiling.points[e] for e in self.tiling.edges];
+    self.LineCol = c.LineCollection(segments);
+    self.LineCol.set_color('blue');
+    self.axis.add_collection(self.LineCol);
+    
+    # add buttons
+    axEdit  = self.fig.add_axes([0.85, 0.85,0.1, 0.04]);
+    #axSave  = self.fig.add_axes([0.85, 0.8, 0.1, 0.04]);
+    #axLoad  = self.fig.add_axes([0.85, 0.75,0.1, 0.04]);
+    self.bEdit   = Button(axEdit,'Edit');
+    #self.bSave   = Button(axSave,'Save');
+    #self.bLoad   = Button(axLoad,'Load');
+    self.bEdit.on_clicked(self.ToggleEdit);
+    #self.bSave.on_clicked(self.Save);
+    #self.bLoad.on_clicked(self.Load);
+
+    self._update();
+    
+
+  def ToggleEdit(self,event):
+    """ 
+    Toggle interactive mode for adding/removing data points 
+    """
+    # Toggle ON
+    if self.bEdit.label.get_text() == 'Edit':
+      self.bEdit.label.set_text('Hold');
+      self.axis.set_picker(True);
+      self.cid_ToggleEdit = \
+        self.fig.canvas.mpl_connect('pick_event', self.__onpick);
+    # Toggle OFF
+    else:
+      self.bEdit.label.set_text('Edit');
+      self.axis.set_picker(False);
+      self.fig.canvas.mpl_disconnect(self.cid_ToggleEdit);
+    self._update();
 
 
+  def __onpick(self,event):
+    """
+    implements the following actions upon a mouse click event
+    1. Left mouse click:  flip edge
+    """
 
-#class TilingBrowser(ImageBrowser):
-#  """
-#  TilingBroswer allows to manually add or remove lines in a 2D image
-#  """
+    x = event.mouseevent.xdata
+    y = event.mouseevent.ydata
+    if self.verbosity>3: print x,y,event.artist;
+
+    # 1. Left mouse click: flip corresponding edge
+    if event.mouseevent.button==1:
+      if event.artist <> self.axis:   return True;
+      inside,prop = self.LineCol.contains(event.mouseevent);
+      if inside and len(prop['ind'])==1:
+        if self.verbosity>2:
+          print "FLIP edge", prop['ind'], " at: ", x,y
+        #self.tiling.edges = np.delete(self.tiling.edges,prop['ind'],axis=0);
+        self.tiling.flip(prop['ind'][0]);
+      self._update_tiling();
+
+    
+  def _update_tiling(self):
+    segments = [self.tiling.points[e] for e in self.tiling.edges];
+    self.LineCol.set_segments(segments);
+    self._update();
+
+  def Save(self,event):
+    import tkFileDialog
+    filename = tkFileDialog.asksaveasfilename(
+         filetypes=(('Text File','*.txt'),
+                    ('XYZ File', '*.xyz')));
+    if not filename: return;
+    ext = filename.split('.')[-1];
+    try:
+      if self.verbosity>1: print("SAVING point list to file '%s'" % filename)
+      if ext=='txt':
+        # TODO: add header
+        np.savetxt(filename,self.points);
+      elif ext=='xyz':
+        OUT=open(filename,'w');
+        # header of xyz file
+        OUT.write("%d\n"%len(self.points));
+        OUT.write("Point positions in (%s,%s) for image '%s'\n" \
+            %(self.imginfo['xunits'],self.imginfo['yunits'],    \
+              self.imginfo['filename']));
+        # data for xyz file (in image coordinates)
+        for x,y in self.points:
+          x,y = self._px2ic(x,y);
+          OUT.write("%2s  %8f  %8f  0.000000\n" % (self.imginfo['atom'], x, y));
+        OUT.close();
+    except:
+      from tkMessageBox import showerror
+      showerror("Save error", "Could not write point list to file '%s'" % filename);
+
+  def Load(self,event):
+    """
+    supported file formats: 
+      *.txt:  list of x,y positions in pixels
+      *.xyz:  absolute coordinates
+    """
+    import tkFileDialog
+    filename = tkFileDialog.askopenfilename(
+         filetypes=(('Text File','*.txt'),
+                    ("XYZ file", "*.xyz")));
+    if not filename: return;
+    ext = filename.split('.')[-1];
+    try:
+      if self.verbosity>1: print("LOADING point list from file '%s'" % filename);    
+      if ext=='txt':
+        self.points=np.genfromtxt(filename,dtype=float);
+      elif ext=='xyz':
+        pts=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
+        self.points=np.asarray(self._ic2px(pts[:,0],pts[:,1])).T;
+    except:
+      from tkMessageBox import showerror
+      showerror("Load error", "could not read point list from file '%s'" % filename);
+    self._update_points();
 
 
 
@@ -269,7 +398,11 @@ if __name__ == '__main__':
   
   # PointBrowser
   pt  = np.random.rand(100, 2)*110; pt[0,:]=0
-  PB=PointBrowser(im,pt,info,verbosity=4);
+  #PB=PointBrowser(im,pt,info,verbosity=4);
+
+  # TilingBrowser
+  from tiling import *
+  TB=TilingBrowser(im,Tiling(pt),info,verbosity=4);
 
   plt.show();
 
