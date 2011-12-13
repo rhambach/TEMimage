@@ -21,7 +21,7 @@ def fit_peaks(data, xperchan=1, yperchan=1):
   data*=1000/np.max(data);
 
   # peak fitting
-  peaks=two_dim_findpeaks(data,peak_width=10);
+  peaks=two_dim_findpeaks(data.T,peak_width=10);
   return peaks[:,0:2], peaks[:,2]; # centers, heights
 
 
@@ -31,25 +31,31 @@ def triangulation(PointBrowser, event):
   # Delaunay-triangulation
   T=Tiling(PointBrowser.points); 
   # manually edit edges
-  pb.TilingBrowser(PointBrowser.image,T,PointBrowser.imginfo,fnext=dual);
+  pb.TilingBrowser(INRAW.data,T,PointBrowser.imginfo,fnext=calc_dual);
   plt.show();
 
 
-def dual(TilingBrowser,event):
+def calc_dual(TilingBrowser,event):
   """
   Raise new instance with dual points generated from the centers 
   of a Delaunay-triangulation
   """
   tri    = TilingBrowser.tiling;
-  Atoms  = tri.get_dual();
+  dual   = tri.get_dual();
   info   = TilingBrowser.imginfo.copy(); 
-  info['desc']=INRAW.mapped_parameters.title+", dual points";
-  #PBatoms=pb.PointBrowser(IN.data,Atoms.points,info);
-  PBimage=pb.ImageBrowser(INRAW.data,info);
-  ax=Atoms.plot_edges(PBimage.axis,fc='darkgray');
-  Atoms.plot_tiles(ax,nvertices=[5],fc='green',alpha=0.3);
-  Atoms.plot_tiles(ax,nvertices=[7],fc='blue',alpha=0.2);
-  Atoms.plot_tiles(ax,nvertices=[1,2,3,4,8,9,10],fc='red');
+  info['desc']+=", dual points";
+  # open different windows depending on mouse button
+  if event.button==1:
+    PBimage=pb.ImageBrowser(INRAW.data,info);
+  elif event.button==2:
+    PBimage=pb.PointBrowser(INRAW.data,dual.points,info,fnext=triangulation);
+  if event.button==3:
+    PBimage=pb.TilingBrowser(INRAW.data,dual,info,fnext=calc_dual);
+  else:
+    ax=dual.plot_edges(PBimage.axis,fc='darkgray');
+    dual.plot_tiles(ax,nvertices=[5],fc='green',alpha=0.3);
+    dual.plot_tiles(ax,nvertices=[7],fc='blue',alpha=0.2);
+    dual.plot_tiles(ax,nvertices=[1,2,3,4,8,9,10],fc='red');
 
   plt.show();
 
@@ -59,8 +65,8 @@ def dual(TilingBrowser,event):
 
 
 # read files (TODO: perform Fourier filter automatically)
-infile="tests/graphene_defect_filtered.dm3";
-rawfile="tests/graphene_defect_raw.dm3";
+infile="tests/graphene_flower_filtered.dm3";
+rawfile="tests/graphene_flower_raw.dm3";
 IN = load(infile);
 INRAW=load(rawfile);
 
@@ -79,7 +85,7 @@ centers, heights = fit_peaks(IN.data);
 centers *= [info['xperchan'], info['yperchan']];
 
 # manually edit center positions
-PBcenter=pb.PointBrowser(INRAW.data,centers,info,fnext=triangulation);
+PBcenter=pb.PointBrowser(IN.data,centers,info,fnext=triangulation);
 
 
 plt.show();

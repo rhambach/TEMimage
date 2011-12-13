@@ -49,8 +49,8 @@ class Tiling:
     else:  # Delaunay triangulation
       from scipy.spatial import Delaunay;
       tri = Delaunay(points);
-      self.vertices = tri.vertices;
-      self.neighbors= tri.neighbors;
+      self.vertices = tri.vertices.tolist();
+      self.neighbors= tri.neighbors.tolist();
       self.edges = [];
       for v in self.vertices:
         for e in self.get_edges_of_tile(self.sort_clockwise(v)):
@@ -121,28 +121,28 @@ class Tiling:
     # find the two tiles that contain both vertices of the edge
     tiles=[]; new_edge=[]
     for t in range(self.ntiles):
-      v     = self.vertices[t];
+      v     = np.asarray(self.vertices[t]);
       if len(v)!= 3: continue;   # only consider triangles
       index = (v==p1) | (v==p2); # boolean index array 
       if index.sum()==2:         # edge is part of tile t
         tiles.append(t); 
         new_edge.append(v[~index][0]);  # -> e1, e2
     if len(tiles)<>2: 
-      if self.verbosity>3: print "FLIP: edge is not part of two triangles";
-      return;
+      print "FLIP: edge is not part of two triangles"; return;
     t1,t2 = tiles; e1,e2 = new_edge;
 
-    # new neighbors
+    # new neighbors for tiles t1, t2, D, B
     for n in self.neighbors[t1]:
       if p2 not in self.vertices[n]: A=n;
       if p1 not in self.vertices[n]: D=n;
     for n in self.neighbors[t2]:
       if p2 not in self.vertices[n]: B=n;
       if p1 not in self.vertices[n]: C=n;
-    print self.neighbors[t1];
     self.neighbors[t1] = [t2,A,B];
     self.neighbors[t2] = [t1,C,D];
-    print self.neighbors[t1];
+    self.neighbors[D]  = [t2 if n==t1 else n for n in self.neighbors[D]];
+    self.neighbors[B]  = [t1 if n==t2 else n for n in self.neighbors[B]];
+
 
     # new tiles (e1,e2,p1), (e1,e2,p2)
     self.vertices[t1] = self.sort_clockwise([e1,e2,p1]);
@@ -150,8 +150,6 @@ class Tiling:
 
     # new edge
     self.edges[edge] = [e1,e2];
-
-    
 
 
   def plot_vertices(self, ax=None, fc='red'):

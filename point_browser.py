@@ -48,8 +48,9 @@ class ImageBrowser(object):
     self.imginfo= {'desc': "", 'filename':"", 'atom':'C', \
                    'xperchan':1., 'yperchan':1., 'xunits':'px', 'yunits':'px'};
     self.imginfo.update(imginfo);
-    self.imginfo['extent'] = [0, self.image.shape[0]*self.imginfo['xperchan'],\
-                              self.image.shape[1]*self.imginfo['yperchan'],0];
+    Imin = self._px2ic(-0.5,-0.5);
+    Imax = self._px2ic(self.image.shape[0]-0.5, self.image.shape[1]-0.5); 
+    self.imginfo['extent'] = [Imin[0],Imax[0], Imin[1],Imax[1]];
         
     # open new figure and draw image
     fig = plt.figure(); self.fig = fig;
@@ -83,10 +84,12 @@ class ImageBrowser(object):
   def _update_image(self):
     " redraw image "
     if self.AxesImage is not None: self.AxesImage.remove();
-    self.AxesImage = self.axis.imshow(self.image,cmap=plt.gray(),\
-                     aspect='equal',extent=self.imginfo['extent']);
+    self.AxesImage = self.axis.imshow(self.image.T,cmap=plt.gray(),\
+        origin='lower',aspect='equal',extent=self.imginfo['extent']);
     self.axis.set_xlabel("x [%s]" % self.imginfo['xunits']);
     self.axis.set_ylabel("y [%s]" % self.imginfo['yunits']);
+    self.axis.set_xlim(*self.imginfo['extent'][0:2]);
+    self.axis.set_ylim(*self.imginfo['extent'][2:4]);
     self._update();
 
   def _update(self):
@@ -127,8 +130,8 @@ class PointBrowser(ImageBrowser):
     assert( self.points.ndim==2 and self.points.shape[1]==2 );
     self.Line2D, = self.axis.plot(self.points[:,0], self.points[:,1],\
                     'ro',picker=5);
-    self.axis.set_xlim(*self.imginfo['extent'][0:2]);
-    self.axis.set_ylim(*self.imginfo['extent'][2:4]);
+    #self.axis.set_xlim(*self.imginfo['extent'][0:2]);
+    #self.axis.set_ylim(*self.imginfo['extent'][2:4]);
 
     # add buttons
     axEdit  = self.fig.add_axes([0.85, 0.85,0.1, 0.04]);
@@ -197,8 +200,8 @@ class PointBrowser(ImageBrowser):
   def Save(self,event):
     import tkFileDialog
     filename = tkFileDialog.asksaveasfilename(
-         filetypes=(('Text File','*.txt'),
-                    ('XYZ File', '*.xyz')));
+         filetypes=(('XYZ File', '*.xyz'),
+                    ('Text File','*.txt')));
     if not filename: return;
     ext = filename.split('.')[-1];
     try:
@@ -215,7 +218,6 @@ class PointBrowser(ImageBrowser):
               self.imginfo['filename']));
         # data for xyz file (in image coordinates)
         for x,y in self.points:
-          x,y = self._px2ic(x,y);
           OUT.write("%2s  %8f  %8f  0.000000\n" % (self.imginfo['atom'], x, y));
         OUT.close();
     except:
@@ -230,8 +232,8 @@ class PointBrowser(ImageBrowser):
     """
     import tkFileDialog
     filename = tkFileDialog.askopenfilename(
-         filetypes=(('Text File','*.txt'),
-                    ("XYZ file", "*.xyz")));
+        filetypes=(('XYZ File', '*.xyz'),
+                    ('Text File','*.txt')));
     if not filename: return;
     ext = filename.split('.')[-1];
     try:
@@ -239,12 +241,13 @@ class PointBrowser(ImageBrowser):
       if ext=='txt':
         self.points=np.genfromtxt(filename,dtype=float);
       elif ext=='xyz':
-        pts=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
-        self.points=np.asarray(self._ic2px(pts[:,0],pts[:,1])).T;
+        self.points=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
     except:
       from tkMessageBox import showerror
       showerror("Load error", "could not read point list from file '%s'" % filename);
     self._update_points();
+
+
 
 
 
@@ -276,14 +279,14 @@ class TilingBrowser(ImageBrowser):
     
     # add buttons
     axEdit  = self.fig.add_axes([0.85, 0.85,0.1, 0.04]);
-    #axSave  = self.fig.add_axes([0.85, 0.8, 0.1, 0.04]);
-    #axLoad  = self.fig.add_axes([0.85, 0.75,0.1, 0.04]);
+    axSave  = self.fig.add_axes([0.85, 0.8, 0.1, 0.04]);
+    axLoad  = self.fig.add_axes([0.85, 0.75,0.1, 0.04]);
     self.bEdit   = Button(axEdit,'Edit');
-    #self.bSave   = Button(axSave,'Save');
-    #self.bLoad   = Button(axLoad,'Load');
+    self.bSave   = Button(axSave,'Save');
+    self.bLoad   = Button(axLoad,'Load');
     self.bEdit.on_clicked(self.ToggleEdit);
-    #self.bSave.on_clicked(self.Save);
-    #self.bLoad.on_clicked(self.Load);
+    self.bSave.on_clicked(self.Save);
+    self.bLoad.on_clicked(self.Load);
 
     self._update();
     
@@ -320,10 +323,9 @@ class TilingBrowser(ImageBrowser):
     if event.mouseevent.button==1:
       if event.artist <> self.axis:   return True;
       inside,prop = self.LineCol.contains(event.mouseevent);
-      if inside and len(prop['ind'])==1:
+      if inside: # flip at least one edge
         if self.verbosity>2:
-          print "FLIP edge", prop['ind'], " at: ", x,y
-        #self.tiling.edges = np.delete(self.tiling.edges,prop['ind'],axis=0);
+          print "FLIP edge", prop['ind'][0], " at: ", x,y
         self.tiling.flip(prop['ind'][0]);
       self._update_tiling();
 
@@ -336,30 +338,19 @@ class TilingBrowser(ImageBrowser):
   def Save(self,event):
     import tkFileDialog
     filename = tkFileDialog.asksaveasfilename(
-         filetypes=(('Text File','*.txt'),
-                    ('XYZ File', '*.xyz')));
+         filetypes=(('Dump File','*.pkl'),));
     if not filename: return;
     ext = filename.split('.')[-1];
     try:
-      if self.verbosity>1: print("SAVING point list to file '%s'" % filename)
-      if ext=='txt':
-        # TODO: add header
-        np.savetxt(filename,self.points);
-      elif ext=='xyz':
-        OUT=open(filename,'w');
-        # header of xyz file
-        OUT.write("%d\n"%len(self.points));
-        OUT.write("Point positions in (%s,%s) for image '%s'\n" \
-            %(self.imginfo['xunits'],self.imginfo['yunits'],    \
-              self.imginfo['filename']));
-        # data for xyz file (in image coordinates)
-        for x,y in self.points:
-          x,y = self._px2ic(x,y);
-          OUT.write("%2s  %8f  %8f  0.000000\n" % (self.imginfo['atom'], x, y));
+      if self.verbosity>1: print("SAVING edges to file '%s'" % filename)
+      if ext=='pkl':
+        import pickle
+        OUT = open(filename, 'wb');
+        pickle.dump(self.tiling, OUT);
         OUT.close();
     except:
       from tkMessageBox import showerror
-      showerror("Save error", "Could not write point list to file '%s'" % filename);
+      showerror("Save error", "Could not write list of edges to file '%s'" % filename);
 
   def Load(self,event):
     """
@@ -369,21 +360,20 @@ class TilingBrowser(ImageBrowser):
     """
     import tkFileDialog
     filename = tkFileDialog.askopenfilename(
-         filetypes=(('Text File','*.txt'),
-                    ("XYZ file", "*.xyz")));
+         filetypes=(('Dump File','*.pkl'),));
     if not filename: return;
     ext = filename.split('.')[-1];
     try:
-      if self.verbosity>1: print("LOADING point list from file '%s'" % filename);    
-      if ext=='txt':
-        self.points=np.genfromtxt(filename,dtype=float);
-      elif ext=='xyz':
-        pts=np.genfromtxt(filename,usecols=(1,2),dtype=float,skip_header=2);
-        self.points=np.asarray(self._ic2px(pts[:,0],pts[:,1])).T;
+      if self.verbosity>1: print("LOADING edges from file '%s'" % filename);    
+      if ext=='pkl':
+        import pickle;
+        IN = open(filename, 'rb');
+        self.tiling=pickle.load(IN);
+        IN.close();
     except:
       from tkMessageBox import showerror
       showerror("Load error", "could not read point list from file '%s'" % filename);
-    self._update_points();
+    self._update_tiling();
 
 
 
@@ -391,14 +381,17 @@ class TilingBrowser(ImageBrowser):
 if __name__ == '__main__':
 
   # ImageBrowser
-  x,y = np.ogrid[0.:.5:.01, 0.:1.:.01];
-  im  = np.exp(-((x-0.5)**2+(y-0.3)**2)/0.2);
-  info= {'desc':'Test Image','xperchan': 2};
-  #IB =ImageBrowser(im,info,verbosity=4);
+  x,y = np.ogrid[0.:0.9:.02, 0.:0.8:.01];
+  im  = np.exp(-((x-0.6)**2+(y-0.3)**2)/0.2);
+  info= {'desc':'Test Image',
+         'xperchan': 0.02, 'yperchan': 0.01,
+         'xunits': 'nm', 'yunits': 'nm'};
+  IB =ImageBrowser(im,info,verbosity=4);
   
   # PointBrowser
-  pt  = np.random.rand(100, 2)*110; pt[0,:]=0
-  #PB=PointBrowser(im,pt,info,verbosity=4);
+  pt  = np.round(np.random.rand(100, 2),decimals=2).tolist();
+  pt.append([0.22,0.02]); 
+  PB=PointBrowser(im,pt,info,verbosity=4);
 
   # TilingBrowser
   from tiling import *
