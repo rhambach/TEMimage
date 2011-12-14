@@ -1,5 +1,6 @@
 """
-   Tiling of 2D space and its dual graph (Delaunay triangulation and Voronoi diagram)
+   Tiling of 2D space and its dual graph (Delaunay triangulation
+    and Voronoi diagram)
 
    VERSION
      $Id$
@@ -93,11 +94,6 @@ class Tiling:
       for v in self.vertices[t]:
           dvertices[v].append(t); 
 
-    #for p in range(self.npoints):
-    #  # new neighbors are connected via an edge with t
-    #  t,n = np.where(self.edges == p);
-    #  dneighbors.append(self.edges[t,n-1]); # end point of edges starting from p
-
     # new neighbors are connected via an edge with t
     for i,j in self.edges:
       dneighbors[i].append(j);
@@ -107,7 +103,7 @@ class Tiling:
 
   def flip(self, edge):
     """
-    flip commen edge between two triangles (flips point coordinates)
+    flip common edge between two triangles and update tiling
                          edge:          p1, p2
           A    p1  B     tile:          t1=(p1,p2,e1), t2=(p1,p2,e2)
              / | \       neighbors:     n1=(t2,A,D),   n2=(t1,B,C)
@@ -142,12 +138,11 @@ class Tiling:
     self.neighbors[t2] = [t1,C,D];
     self.neighbors[D]  = [t2 if n==t1 else n for n in self.neighbors[D]];
     self.neighbors[B]  = [t1 if n==t2 else n for n in self.neighbors[B]];
-
-
+    
     # new tiles (e1,e2,p1), (e1,e2,p2)
     self.vertices[t1] = self.sort_clockwise([e1,e2,p1]);
     self.vertices[t2] = self.sort_clockwise([e1,e2,p2]);
-
+    
     # new edge
     self.edges[edge] = [e1,e2];
 
@@ -221,6 +216,8 @@ if __name__ == '__main__':
   #D = V.get_dual();
   D.plot_vertices(ax,'green');
   D.plot_edges(ax,'green');
+
+  D.flip(100);
 
   for x in (Delaunay, Voronoi, D):
     print x.npoints, x.ntiles, x.nedges, len(x.neighbors)
