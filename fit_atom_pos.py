@@ -65,10 +65,10 @@ def calc_dual(TilingBrowser,event):
 
 
 # read files (TODO: perform Fourier filter automatically)
-#infile="tests/graphene_flower_filtered.dm3";
-#rawfile="tests/graphene_flower_raw.dm3";
-infile="tests/graphene_all_filtered.dm3";
-rawfile="tests/graphene_all_raw.dm3";
+infile="tests/graphene_flower_filtered.dm3";
+rawfile="tests/graphene_flower_raw.dm3";
+#infile="tests/graphene_all_filtered.dm3";
+#rawfile="tests/graphene_all_raw.dm3";
 IN = load(infile);
 INRAW=load(rawfile);
 
