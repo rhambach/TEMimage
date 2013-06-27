@@ -1,3 +1,20 @@
+######################################
+# Tests for pyFAI
+#  - works on discretized probability densities, i.e., input is f(x,y)
+#    output is f(r,phi) or f(r) for integrate2d/1d
+#  - connection with image intensity (binned probability density):
+#    cartesian coords
+#     Ixy =  Dx Dy f(x,y)    (Image value at point x,y, pixel size Dx,Dy)
+#     I   =  Int dx dy f(x,y) = Sum Ixy  (total image intensity)
+#    polar coords
+#     Irphi= Dr Dphi r f(r,phi)  
+#     I   =  Int dr dphi r f(r,phi) = Sum Irphi
+#  - different units are used in pixel size for __init__ (m) and integrate?d (mm)
+#  - units for angle seem to be not always consistently degree or rad internally
+#  - integrate1d and integrate2d are equivalent as long as we do not 
+#    exceed the image size r<L/sqrt(2)
+########################################
+
 import numpy as np
 import matplotlib.pylab as plt
 import tifffile as tiff
@@ -7,6 +24,19 @@ import pyFAI;
 import scipy
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+
+def gauss2D(x,y, x0,y0, A, fwhm, bg):
+  """
+   normalised 2D gaussian function 
+   A    ... integral
+   x0,y0... central position
+   fwhm ... full widht half maximum of marginal probabilities
+   bg   ... background
+   [http://mathworld.wolfram.com/GaussianFunction.html]
+  """
+  sigma = fwhm / 2.354820045;  # fwhm / 2*sqrt(2 ln(2))  
+  return bg + A/(2*np.pi*sigma**2) * \
+          np.exp(-((x-x0)**2+(y-y0)**2)/(2*sigma**2));
 
 def output_tif(outfile,img,int8=False,dtype=None):
   import tifffile as tiff
@@ -22,26 +52,62 @@ def output_tif(outfile,img,int8=False,dtype=None):
     tiff.imsave(outfile,img);
 plt.show(); 
 
-def find_peaks(data, neighborhood_size=5, threshold=5e4):
+def find_objects(data, size=5, thresh=None, N=20, verbosity=1):
 
-  data_max = filters.maximum_filter(data, neighborhood_size)
+  # maximum step height in neighborhood of size 'size'
+  data_max = filters.maximum_filter(data, size)
+  data_min = filters.minimum_filter(data, size)
+  diff = data_max - data_min;
+
+  # determine threshold which gives N pixels
+  if thresh is None:  thresh=np.sort(diff.flat)[-N];
+
+  # create mask for image (maximum with high step size)
   maxima = (data == data_max)
-  data_min = filters.minimum_filter(data, neighborhood_size)
-  diff = ((data_max - data_min) > threshold)
-  maxima[diff == 0] = 0
-  plt.figure()
-  plt.imshow(-maxima,interpolation='nearest')
- 
+  maxima[diff <= thresh] = False
+  
+  # find connected objects (pixel agglomerates)
   labeled, num_objects = ndimage.label(maxima)
   slices = ndimage.find_objects(labeled)
-  print len(slices);
-  x, y = [], []
+
+  # DEBUG
+  if verbosity>2:
+    plt.figure()
+    plt.imshow(np.log(1+np.abs(data)),interpolation='nearest');
+    # create overlay with red color (r,g,b,alpha) at each image point 
+    overlay = np.zeros(data.shape+(4,));
+    overlay[maxima] = (1,1,0,1); # set opacity according to maxima
+    plt.imshow(overlay,interpolation='nearest');
+
+  return slices;
+
+def find_peaks(data, size=5, fitradius=None, thresh=None, N=20,verbosity=1):
+  # iterate to find really the number N ?
+  slices = find_objects(data,size,thresh=thresh,N=N,verbosity=verbosity-10);  
+
+  # iterate over peaks
+  pos = [];
   for dy,dx in slices:
-    x_center = (dx.start + dx.stop - 1)/2
-    x.append(x_center)
-    y_center = (dy.start + dy.stop - 1)/2    
-    y.append(y_center)
-  return x,y
+
+    # initial guess for peak parameters
+    x = (dx.start + dx.stop - 1)/2
+    y = (dy.start + dy.stop - 1)/2    
+    
+    # refined fit
+    if fitradius is not None:
+      X,Y=np.ogrid[0:2*fitradius+1,0:2*fitradius+1];
+      X-=fitradius+x; Y-=fitradius+y;
+      region    = data[X,Y],# (periodic boundary conditions)
+      print x,y, fitradius, region.shape;
+      plt.figure();
+      plt.imshow(region);
+      plt.show();
+      param0    = (0,0,np.sum(data),1,0);
+      residuals = lambda param,data:  gauss(X,Y,*param);
+
+    pos.append((x,y));
+
+  return np.transpose(pos);
 
 def refine_fit(data,peaks,model,p0):
   for x,y in peaks:
@@ -54,38 +120,62 @@ if __name__ == '__main__':
 
   # load tiff image
   filename="tests/TiO2_0eV.tif";
-  img = tiff.imread(filename);
-  N,M = img.shape;
-  scale=0.015366*4;  # nm/px
-  assert M==N;
+  img = tiff.imread(filename); # bin image to cut reciprocal radius
+  N,M = img.shape;  assert M==N;
+  scale=0.015366*4;            # nm/px
+  dx=dy= 2*np.pi/scale/N/10;   # bin width for cartesian coord [A-1/px]
 
   # reciprocal lattice
-  diff= np.abs(np.fft.fftshift(np.fft.fft2(img)));
-  O   = np.asarray((N,M))/2.;   # center of image
+  Ixy= np.abs(np.fft.fftshift(np.fft.fft2(img)));
+  fxy= Ixy/dx/dy;              # density distribution f(x,y)
+  I  = np.sum(Ixy)             # total intensity
+  O  = np.asarray((N,M))/2.;   # center of image [px]
   info={'xlabel': 'y','ylabel': 'x'}
-  fig1= wq.WQBrowser(diff,info,interpolation='none');
+  fig1= wq.WQBrowser(Ixy,info,interpolation='none');
   print O
 
   # polar trafo
-  dq = 2*np.pi/scale/N/10; # in 1/A/px
-  dq/= 1000;            # take into account difference in units in pyFAI
-                        # pixel size in m, results in mm
-  ai = pyFAI.AzimuthalIntegrator(pixel1=dq,pixel2=dq,poni1=O[0]*dq,poni2=O[1]*dq); # pixel size in m
-  out= ai.integrate1d(diff,1000,radial_range=(0,5),unit=pyFAI.units.R); # in mm
-  plt.figure();
-  plt.plot(*out);
+  rmin = 0;
+  rmax = 5;                 # range for |q| [A-1]
+  Nr   = 100;                # number of bins along radius
+  Nphi = 360;                # number of bins along angle
+  dr   = (rmax-rmin)/float(Nr);
+  dphi = 2*np.pi/float(Nphi);
+  
+  # create PolarTrafo object and set pixel size
+  # NOTE: pixel size in __init__ is given in meter, while
+  #       all other units are returned in mm
+  pw=dx/1000;
+  ai = pyFAI.AzimuthalIntegrator(pixel1=pw,pixel2=pw,poni1=O[0]*pw,poni2=O[1]*pw); # pixel size in m
 
-  rphi,r,phi=ai.integrate2d(diff,300,radial_range=(0,5),unit=pyFAI.units.R); # mm
-  dr=r[1]-r[0];
-  dphi=phi[1]-phi[0];
-  assert np.allclose(r[1:]-r[:-1],dr);
-  assert np.allclose(phi[1:]-phi[:-1],dphi);
-  info={'xlabel': 'x','ylabel':'y',
-        'xperchan': dr, 'yperchan': dphi,
+  # radial distribution f(r)/(2*pi) = Int dphi f(r,phi) / (2*pi)
+  r,fr = ai.integrate1d(fxy,Nr,radial_range=(rmin,rmax),unit=pyFAI.units.R); # in mm
+  plt.figure();
+  plt.title('radial distribution');
+  plt.xlabel('|q| [1/A]'); plt.ylabel('q*f(q)')
+  plt.plot(r,fr*r*2*np.pi);
+
+  # polar distribution f(r,phi)
+  frphi,r,phi=ai.integrate2d(fxy,Nr,Nphi,radial_range=(rmin,rmax),unit=pyFAI.units.R); # mm
+  Irphi = frphi*r*dphi*dr
+  plt.plot(r,np.sum(frphi,axis=0)*dphi*r);   # comparison with radial distribution
+   
+  print "Test total intensity of image: ", I # test total intensity
+  print "            - sum integrate2d: ", np.sum(Irphi)
+  print "            - sum integrate1d: ", np.sum(fr*r)*dr*2*np.pi
+
+  assert np.allclose(r[1:]-r[:-1],dr);       # test step sizes
+  assert np.allclose(phi[1:]-phi[:-1],360/float(Nphi),rtol=0.01);
+
+  # plot polar distribution and fit peaks
+  info={'xlabel': '|q|','ylabel':'polar angle',
+        'xperchan': r[1]-r[0], 'yperchan': phi[1]-phi[0],
         'xoffset': r[0],'yoffset': phi[0],
-        'xunits' : '1/A','yunits':'degree'}
-  x,y = find_peaks(rphi);
-  fig2= wq.WQBrowser(rphi,info,interpolation='none',aspect='auto');
+        'xunits' : '1/A','yunits':'degree', 
+        'desc':'polar distribution q*f(q,phi)'}
+  x,y = find_peaks(Irphi,N=2000);
+
+  fig2= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
   fig2.axis.plot(r[x],phi[y], 'rx')
 
   plt.show();
