@@ -124,6 +124,15 @@ if __name__ == '__main__':
   N,M = img.shape;  assert M==N;
   scale=0.015366*4;            # nm/px
   dx=dy= 2*np.pi/scale/N/10;   # bin width for cartesian coord [A-1/px]
+  edge = 0                    # width of edge to be smoothed
+
+  # mask edge
+  mx = np.zeros(N); my= np.zeros(M);
+  mx[0:edge] = mx[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
+  my[0:edge] = my[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
+  mask=np.maximum(np.tile(mx,(M,1)).T,np.tile(my,(N,1)));
+  I = np.mean(img);
+  img = I*mask + img*(1-mask);
 
   # reciprocal lattice
   Ixy= np.abs(np.fft.fftshift(np.fft.fft2(img)));
