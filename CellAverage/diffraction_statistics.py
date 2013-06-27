@@ -1,29 +1,46 @@
-######################################
-# Tests for pyFAI
-#  - works on discretized probability densities, i.e., input is f(x,y)
-#    output is f(r,phi) or f(r) for integrate2d/1d
-#  - connection with image intensity (binned probability density):
-#    cartesian coords
-#     Ixy =  Dx Dy f(x,y)    (Image value at point x,y, pixel size Dx,Dy)
-#     I   =  Int dx dy f(x,y) = Sum Ixy  (total image intensity)
-#    polar coords
-#     Irphi= Dr Dphi r f(r,phi)  
-#     I   =  Int dr dphi r f(r,phi) = Sum Irphi
-#  - different units are used in pixel size for __init__ (m) and integrate?d (mm)
-#  - units for angle seem to be not always consistently degree or rad internally
-#  - integrate1d and integrate2d are equivalent as long as we do not 
-#    exceed the image size r<L/sqrt(2)
-########################################
-
 import numpy as np
 import matplotlib.pylab as plt
-import tifffile as tiff
 import wqplot.wq_stack as wq
-import img_filter as filt
-import pyFAI;
-import scipy
+import polartrafo 
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+
+def power_spectrum(img,scale=1,edge=0):
+  """
+  Calculate Modulus of the Fourier Transform of an image.
+
+    img   ... input image (array of shape NxM)
+    scale ... (scalar or tuple) pixel size in x and y direction
+    edge  ... (opt) width of edge which is smoothed before FFT
+              to avoid artefacts due to jump at periodic border
+
+  RETURNS absfft, qx, qy
+    the origin is shifted to the center at O=(int(N/2), int(M/2))
+  """
+  # init parameters
+  N,M = img.shape; 
+  dx,dy = (scale,scale) if np.isscalar(scale) else scale;
+
+  # mask edge
+  if edge>0:
+    mx = np.zeros(N); my= np.zeros(M);
+    mx[0:edge] = mx[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
+    my[0:edge] = my[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
+    mask=np.maximum(np.tile(mx,(M,1)).T,np.tile(my,(N,1)));
+    I = np.mean(img);
+    img = I*mask + img*(1-mask);  # blend between img and <img>
+
+  # abs(fft)
+  absfft = np.abs(np.fft.fftshift(np.fft.fft2(img)));
+  qx     = np.fft.fftshift(np.fft.fftfreq(N))*2*np.pi/dx;
+  qy     = np.fft.fftshift(np.fft.fftfreq(M))*2*np.pi/dy;
+
+  assert abs(qx[1]-qx[0] - 2*np.pi/dx/N) < 1e-10
+  assert qx[int(N/2)]== 0
+  assert abs(qy[1]-qy[0] - 2*np.pi/dy/M) < 1e-10
+  assert qy[int(M/2)]== 0
+
+  return absfft, qx, qy
 
 def gauss2D(x,y, x0,y0, A, fwhm, bg):
   """
@@ -114,6 +131,7 @@ def refine_fit(data,peaks,model,p0):
     # fit model function
     pass
 
+
 # -- main ----------------------------------------
 if __name__ == '__main__':
   import tifffile as tiff
@@ -123,58 +141,18 @@ if __name__ == '__main__':
   img = tiff.imread(filename); # bin image to cut reciprocal radius
   N,M = img.shape;  assert M==N;
   scale=0.015366*4;            # nm/px
-  dx=dy= 2*np.pi/scale/N/10;   # bin width for cartesian coord [A-1/px]
-  edge = 0                    # width of edge to be smoothed
+  scale*=10;                   #  A/px
 
-  # mask edge
-  mx = np.zeros(N); my= np.zeros(M);
-  mx[0:edge] = mx[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
-  my[0:edge] = my[-1:-edge-1:-1] = 1 - np.linspace(0,1,edge);
-  mask=np.maximum(np.tile(mx,(M,1)).T,np.tile(my,(N,1)));
-  I = np.mean(img);
-  img = I*mask + img*(1-mask);
-
-  # reciprocal lattice
-  Ixy= np.abs(np.fft.fftshift(np.fft.fft2(img)));
-  fxy= Ixy/dx/dy;              # density distribution f(x,y)
-  I  = np.sum(Ixy)             # total intensity
-  O  = np.asarray((N,M))/2.;   # center of image [px]
-  info={'xlabel': 'y','ylabel': 'x'}
-  fig1= wq.WQBrowser(Ixy,info,interpolation='none');
-  print O
+  # perform FFT
+  Ixy,qx,qy=power_spectrum(img,scale=scale,edge=20);
+  dqx=qx[1]-qx[0];
+  dqy=qy[1]-qy[0];             # A-1/px
 
   # polar trafo
   rmin = 0;
   rmax = 5;                 # range for |q| [A-1]
-  Nr   = 100;                # number of bins along radius
-  Nphi = 360;                # number of bins along angle
-  dr   = (rmax-rmin)/float(Nr);
-  dphi = 2*np.pi/float(Nphi);
-  
-  # create PolarTrafo object and set pixel size
-  # NOTE: pixel size in __init__ is given in meter, while
-  #       all other units are returned in mm
-  pw=dx/1000;
-  ai = pyFAI.AzimuthalIntegrator(pixel1=pw,pixel2=pw,poni1=O[0]*pw,poni2=O[1]*pw); # pixel size in m
-
-  # radial distribution f(r)/(2*pi) = Int dphi f(r,phi) / (2*pi)
-  r,fr = ai.integrate1d(fxy,Nr,radial_range=(rmin,rmax),unit=pyFAI.units.R); # in mm
-  plt.figure();
-  plt.title('radial distribution');
-  plt.xlabel('|q| [1/A]'); plt.ylabel('q*f(q)')
-  plt.plot(r,fr*r*2*np.pi);
-
-  # polar distribution f(r,phi)
-  frphi,r,phi=ai.integrate2d(fxy,Nr,Nphi,radial_range=(rmin,rmax),unit=pyFAI.units.R); # mm
-  Irphi = frphi*r*dphi*dr
-  plt.plot(r,np.sum(frphi,axis=0)*dphi*r);   # comparison with radial distribution
-   
-  print "Test total intensity of image: ", I # test total intensity
-  print "            - sum integrate2d: ", np.sum(Irphi)
-  print "            - sum integrate1d: ", np.sum(fr*r)*dr*2*np.pi
-
-  assert np.allclose(r[1:]-r[:-1],dr);       # test step sizes
-  assert np.allclose(phi[1:]-phi[:-1],360/float(Nphi),rtol=0.01);
+  Irphi,r,phi = polartrafo.polar_distribution(Ixy,scale=(dqx,dqy),
+                  Nphi=360,Nr=100,rmin=rmin,rmax=rmax,verbosity=3);
 
   # plot polar distribution and fit peaks
   info={'xlabel': '|q|','ylabel':'polar angle',
@@ -182,9 +160,8 @@ if __name__ == '__main__':
         'xoffset': r[0],'yoffset': phi[0],
         'xunits' : '1/A','yunits':'degree', 
         'desc':'polar distribution q*f(q,phi)'}
+  fig1= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
   x,y = find_peaks(Irphi,N=2000);
-
-  fig2= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
-  fig2.axis.plot(r[x],phi[y], 'rx')
+  fig1.axis.plot(r[x],phi[y], 'rx')
 
   plt.show();
