@@ -182,12 +182,6 @@ if __name__ == '__main__':
   Irphi,r,phi = polartrafo.polar_distribution(Ixy,scale=(dqx,dqy),
                   Nphi=360,Nr=1000,rmin=rmin,rmax=rmax,verbosity=3);
 
-  # produce test data
-  #bragg1 = 34 + np.asarray([-180,-90,0,90]); # define angles of bragg peaks
-  #np.random.seed(0);
-  #Irphi[:]=np.random.poisson(1,size=Irphi.shape); 
-  #Irphi[bragg1]+=10;
-
   # plot polar distribution and fit peaks
   info={'xlabel': '|q|','ylabel':'polar angle',
         'xperchan': r[1]-r[0], 'yperchan': phi[1]-phi[0],
@@ -225,15 +219,16 @@ if __name__ == '__main__':
 
   plt.figure()
   plt.plot(r,tot,'k',label='average')
-  #plt.plot(r,bg, 'b',label='background');
-  #plt.plot(r,sig1_bg, 'r',label='first Bragg');
-  #plt.plot(r,sig2_bg, 'g',label='second Bragg');
-  #plt.ylim(0, np.max(sig1_bg[r>1]) + np.max(sig2_bg[r>1]));
+  plt.plot(r,bg, 'b',label='background');
+  plt.plot(r,sig1_bg, 'r',label='first Bragg');
+  plt.plot(r,sig2_bg, 'g',label='second Bragg');
+  plt.ylim(0, np.max(sig1_bg[r>1]) + np.max(sig2_bg[r>1]));
   plt.legend();
 
   # statistics
   sig1   = ( sig1_bg - bg )  * np.sum(mask1);   # total intensity in 1. Bragg
   sig2   = ( sig2_bg - bg )  * np.sum(mask2);   # total intensity in 2. Bragg
+  plt.figure();
   plt.plot(r,sig1)
   plt.plot(r,sig2)
   b1 = np.sum(sig1[np.logical_and(1.2<r, r<1.5)]);  
@@ -246,6 +241,4 @@ if __name__ == '__main__':
   print "#  Bragg1  Bragg2  Bragg3  <Img>"
   print "   %f      %f      %f      %f   " % (b1,b2,b3,np.sum(Ixy))
   
-#  plt.plot(r,sig);
-
   plt.show();
