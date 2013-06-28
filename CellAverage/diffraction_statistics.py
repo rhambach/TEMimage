@@ -150,7 +150,7 @@ if __name__ == '__main__':
 
   # polar trafo
   rmin = 0;
-  rmax = 5;                 # range for |q| [A-1]
+  rmax = 5;                  # range for |q| [A-1]
   Irphi,r,phi = polartrafo.polar_distribution(Ixy,scale=(dqx,dqy),
                   Nphi=360,Nr=100,rmin=rmin,rmax=rmax,verbosity=3);
 
@@ -161,7 +161,36 @@ if __name__ == '__main__':
         'xunits' : '1/A','yunits':'degree', 
         'desc':'polar distribution q*f(q,phi)'}
   fig1= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
-  x,y = find_peaks(Irphi,N=2000);
-  fig1.axis.plot(r[x],phi[y], 'rx')
+  x,y = find_peaks(Irphi,N=200);
+  fig1.axis.plot(r[x],phi[y], 'rx');
+  
+  dp     = 10
+  bragg1 = 34 + np.asarray([-180,-90,0,90]); # define angles of bragg peaks
+  bragg2 = bragg1+45
+
+  def get_mask(bragg, c=(1,0,0,0.3)):
+    mask   = np.zeros(len(phi),dtype=bool);
+    for p0 in bragg:
+      mask[np.abs(phi-p0)<dp] = True;
+    # plot mask for reference
+    color = np.zeros((len(phi),len(r),4));
+    color[mask] = c; 
+    fig1.axis.imshow(color, extent=fig1.imginfo['extent'],
+                       interpolation='none',aspect='auto');
+    return mask
+
+  mask1  = get_mask(bragg1,c=(1,0,0,0.3));
+  mask2  = get_mask(bragg2,c=(0,1,0,0.3));
+  mask   = np.logical_or(mask1,mask2);
+
+  # calculate average for background
+  bg     = np.sum(Irphi[~mask],axis=0) / np.sum(~mask);  # average background spectrum
+  sig_bg = np.sum(Irphi[mask],axis=0)  / np.sum(mask);   # average signal+bg  spectrum
+  sig    = ( sig_bg - bg )      * np.sum(mask);   # total intensity in 1. Bragg
+
+  plt.figure()
+  plt.plot(r,bg);
+  plt.plot(r,sig_bg);
+  plt.plot(r,sig);
 
   plt.show();
