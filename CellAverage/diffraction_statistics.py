@@ -57,7 +57,7 @@ def power_spectrum(img,scale=1,edge=0,verbosity=1):
   assert qx[int(N/2)]== 0
   assert abs(qy[1]-qy[0] - 2*np.pi/dy/M) < 1e-10
   assert qy[int(M/2)]== 0
-  assert absfft[int(N/2),int(M/2)] - np.mean(img)*N*M < 1e-10;
+  assert np.allclose(absfft[int(N/2),int(M/2)], np.mean(img)*N*M)
   if verbosity>3 and edge>0:
     plt.figure();
     plt.title("masked Image for FFT, edge width %d px"%edge)
@@ -158,87 +158,110 @@ def refine_fit(data,peaks,model,p0):
 # -- main ----------------------------------------
 if __name__ == '__main__':
   import tifffile as tiff
-
-  # load tiff image
-  filename="tests/TiO2_0eV.tif";
-  filename="tests/TiO2_462eV.tif";
-  img = tiff.imread(filename); # bin image to cut reciprocal radius
-  #img = img[::2]+img[1::2];
-  #img = img[:,::2]+img[:,1::2];# rebin by 2
-
-  #img = img[1:]    # test for N<>M, N odd
-  N,M = img.shape;  assert M==N;
-  scale=0.015366*4            # nm/px
-  scale*=10;                   #  A/px
-
-  # perform FFT
-  Ixy,qx,qy=power_spectrum(img,scale=scale,edge=0,verbosity=5);
-  dqx=qx[1]-qx[0];
-  dqy=qy[1]-qy[0];             # A-1/px
-
-  # polar trafo
-  rmin = 0.5;
-  rmax = 5;                  # range for |q| [A-1]
-  Irphi,r,phi = polartrafo.polar_distribution(Ixy,scale=(dqx,dqy),
-                  Nphi=360,Nr=1000,rmin=rmin,rmax=rmax,verbosity=3);
-
-  # plot polar distribution and fit peaks
-  info={'xlabel': '|q|','ylabel':'polar angle',
-        'xperchan': r[1]-r[0], 'yperchan': phi[1]-phi[0],
-        'xoffset': r[0],'yoffset': phi[0],
-        'xunits' : '1/A','yunits':'degree', 
-        'desc':'polar distribution q*f(q,phi)'}
-  fig1= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
-  #x,y = find_peaks(Irphi,N=200);
-  #fig1.axis.plot(r[x],phi[y], 'rx');
   
-  dp     = 5
-  bragg1 = 34 + np.asarray([-180,-90,0,90]); # define angles of bragg peaks
-  bragg2 = bragg1+45
+  # iterate over multiple images
+  for i in range(1):    
 
-  def get_mask(bragg, c=(1,0,0,0.3)):
-    mask   = np.zeros(len(phi),dtype=bool);
-    for p0 in bragg:
-      mask[np.abs(phi-p0)<dp] = True;
-    # plot mask for reference
-    color = np.zeros((len(phi),len(r),4));
-    color[mask] = c; 
-    fig1.axis.imshow(color, extent=fig1.imginfo['extent'],
-                       interpolation='none',aspect='auto');
-    return mask
-
-  mask1  = get_mask(bragg1,c=(1,0,0,0.3));
-  mask2  = get_mask(bragg2,c=(0,1,0,0.3));
-  mask   = np.logical_or(mask1,mask2);
-
-  # calculate average for background
-  tot    = np.mean(Irphi,      axis=0);
-  bg     = np.sum(Irphi[~mask],axis=0) / np.sum(~mask);  # average background spectrum
-  sig1_bg= np.sum(Irphi[mask1],axis=0) / np.sum(mask1);  # average signal1+bg spectrum
-  sig2_bg= np.sum(Irphi[mask2],axis=0) / np.sum(mask2);  # average signal2+bg spectrum
-
-  plt.figure()
-  plt.plot(r,tot,'k',label='average')
-  plt.plot(r,bg, 'b',label='background');
-  plt.plot(r,sig1_bg, 'r',label='first Bragg');
-  plt.plot(r,sig2_bg, 'g',label='second Bragg');
-  plt.ylim(0, np.max(sig1_bg[r>1]) + np.max(sig2_bg[r>1]));
-  plt.legend();
-
-  # statistics
-  sig1   = ( sig1_bg - bg )  * np.sum(mask1);   # total intensity in 1. Bragg
-  sig2   = ( sig2_bg - bg )  * np.sum(mask2);   # total intensity in 2. Bragg
-  plt.figure();
-  plt.plot(r,sig1)
-  plt.plot(r,sig2)
-  b1 = np.sum(sig1[np.logical_and(1.2<r, r<1.5)]);  
-  b2 = np.sum(sig2[np.logical_and(1.8<r, r<2.1)]);  
-  b3 = np.sum(sig1[np.logical_and(2.6<r, r<2.9)]);# problematic due to 4th Bragg in bg  
-
-  print "# Statistics for Bragg Peak Intensity"
-  print "#  image : '%s'" % filename
-  print "#  dphi  : +/- %5.1f deg" % dp
-  print "#  Bragg1  Bragg2  Bragg3  <Img>"
-  print "   %f      %f      %f      %f   " % (b1,b2,b3,np.sum(Ixy))
+    # load tiff image
+    #filename="pattern%04d"%i;
+    #filename="tests/TiO2_0eV.tif";
+    filename="tests/TiO2_462eV.tif";
+    img = tiff.imread(filename); # bin image to cut reciprocal radius
+    img = img.astype(np.float);  # avoid overflow
+    #img = img[512:1536,512:1536];# cut image at center
+    nbin2=0;                     # number of binning by 2
   
-  plt.show();
+    I = np.sum(img);
+    for _ in range(nbin2):
+      img = img[::2]+img[1::2];
+      img = img[:,::2]+img[:,1::2];# rebin by 2
+      assert np.allclose(I,np.sum(img))  # no change in total intensity !
+  
+    #img = img[1:]    # test for N<>M, N odd
+    N,M = img.shape;  assert M==N;
+    scale=0.015366*4*2**nbin2     # nm/px
+    scale*=10;                    #  A/px
+  
+    # perform FFT
+    rel_edge =0.05;              # relative width of edge to be smoothed
+    Ixy,qx,qy=power_spectrum(img,scale=scale,edge=rel_edge*min(M,N),verbosity=2);
+    dqx=qx[1]-qx[0];
+    dqy=qy[1]-qy[0];             # A-1/px
+    if i==0:
+      plt.figure()
+      plt.imshow(np.log(1+Ixy),cmap=plt.cm.gray);
+  
+    # polar trafo
+    rmin = 0.5;
+    rmax = 5;                  # range for |q| [A-1]
+    Irphi,r,phi = polartrafo.polar_distribution(Ixy,scale=(dqx,dqy),
+                    Nphi=360,Nr=1000,rmin=rmin,rmax=rmax,verbosity=3);
+  
+    fig1=None;
+    if i==0:
+      # plot polar distribution and fit peaks
+      info={'xlabel': '|q|','ylabel':'polar angle',
+            'xperchan': r[1]-r[0], 'yperchan': phi[1]-phi[0],
+            'xoffset': r[0],'yoffset': phi[0],
+            'xunits' : '1/A','yunits':'degree', 
+            'desc':'polar distribution q*f(q,phi)'}
+      fig1= wq.WQBrowser(Irphi,info, interpolation='none',aspect='auto');
+      x,y = find_peaks(Irphi,N=200);
+      fig1.axis.plot(r[x],phi[y], 'rx');
+    
+    dp     = 5
+    bragg1 = 34 + np.asarray([-180,-90,0,90]); # define angles of bragg peaks
+    bragg2 = bragg1+45
+  
+    def get_mask(bragg, c=(1,0,0,0.3)):
+      mask   = np.zeros(len(phi),dtype=bool);
+      for p0 in bragg:
+        mask[np.abs(phi-p0)<dp] = True;
+      # plot mask for reference
+      color = np.zeros((len(phi),len(r),4));
+      color[mask] = c; 
+      if fig1 is not None:
+        fig1.axis.imshow(color, extent=fig1.imginfo['extent'],
+                         interpolation='none',aspect='auto');
+      return mask
+  
+    mask1  = get_mask(bragg1,c=(1,0,0,0.3));
+    mask2  = get_mask(bragg2,c=(0,1,0,0.3));
+    mask   = np.logical_or(mask1,mask2);
+  
+    # calculate average for background
+    tot    = np.mean(Irphi,      axis=0);
+    bg     = np.sum(Irphi[~mask],axis=0) / np.sum(~mask);  # average background spectrum
+    sig1_bg= np.sum(Irphi[mask1],axis=0) / np.sum(mask1);  # average signal1+bg spectrum
+    sig2_bg= np.sum(Irphi[mask2],axis=0) / np.sum(mask2);  # average signal2+bg spectrum
+  
+    if i==0:
+      plt.figure()
+      plt.title("radial distribution for '%s'"%filename);
+      plt.plot(r,tot,'k',label='average') 
+      plt.plot(r,bg, 'b',label='background');
+      plt.plot(r,sig1_bg, 'r',label='first Bragg');
+      plt.plot(r,sig2_bg, 'g',label='second Bragg');
+      plt.ylim(0, np.max(sig1_bg[r>1]) + np.max(sig2_bg[r>1]));
+      plt.legend();
+  
+    # statistics
+    sig1   = ( sig1_bg - bg )  * np.sum(mask1);   # total intensity in 1. Bragg
+    sig2   = ( sig2_bg - bg )  * np.sum(mask2);   # total intensity in 2. Bragg
+    plt.figure();
+    plt.plot(r,sig1)
+    plt.plot(r,sig2)
+    b1 = np.sum(sig1[np.logical_and(1.2<r, r<1.5)]);  
+    b2 = np.sum(sig2[np.logical_and(1.8<r, r<2.1)]);  
+    b3 = np.sum(sig1[np.logical_and(2.6<r, r<2.9)]);# problematic due to 4th Bragg in bg  
+  
+    if i==0:
+      print "# Statistics for Bragg Peak Intensity"
+      print "#  image : '%s'" % filename
+      print "#  cropped: ???" 
+      print "#  binning: %dx%d" %(2**nbin2,2**nbin2)
+      print "#  dphi  : +/- %5.1f deg" % dp
+      print "#  Bragg1  Bragg2  Bragg3  <Img>"
+    print "   %8.3g %8.3g %8.3g  %8.3g   " % (b1,b2,b3,np.sum(img))
+    
+    plt.show();
