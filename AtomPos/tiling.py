@@ -3,7 +3,7 @@
     and Voronoi diagram)
 
    VERSION
-     $Id$
+     $Id: tiling.py 17 2011-12-14 15:25:59Z hambach $
 
    USAGE
      An example can be found at the end of this file and can be executed
@@ -14,9 +14,9 @@
      Use of this source code is governed by a BSD-style license that 
      can be found in the LICENSE file.
 """
-__version__ = "$Revision$"
+__version__ = "$Revision: 17 $"
 __author__ = "Ralf Hambach"
-__date__ = "$Date$"
+__date__ = "$Date: 2011-12-14 16:25:59 +0100 (Wed, 14 Dec 2011) $"
 
 
 import numpy as np;

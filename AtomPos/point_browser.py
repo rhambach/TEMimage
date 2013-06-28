@@ -2,7 +2,7 @@
      Simple GUI for manually specifying points on a 2D image
 
    VERSION
-     $Id$
+     $Id: point_browser.py 15 2011-12-13 22:20:48Z hambach $
 
    USAGE
      An example can be found at the end of this file and can be executed
@@ -13,9 +13,9 @@
      Use of this source code is governed by a BSD-style license that 
      can be found in the LICENSE file.
 """
-__version__ = "$Revision$"
+__version__ = "$Revision: 15 $"
 __author__ = "Ralf Hambach"
-__date__ = "$Date$"
+__date__ = "$Date: 2011-12-13 23:20:48 +0100 (Tue, 13 Dec 2011) $"
 
 import numpy as np
 import matplotlib.pylab as plt
