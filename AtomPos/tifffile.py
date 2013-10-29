@@ -1,16 +1,13 @@
-"""
-  Slightly modified version of original tifffile from Chritoph Gohlke.
-
-  Copyright (c) 2013, rhambach. 
-    This file is part of the FitAtomPos package and released
-    under the MIT-Licence. See LICENCE file for details.
-"""
-
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # tifffile.py
-
+#
+#  Slightly modified version of original tifffile from Chritoph Gohlke.
+#
+#  Copyright (c) 2013, rhambach. 
+#    This file is part of the FitAtomPos package and released
+#    under the MIT-Licence. See LICENCE file for details.
+#
 # Copyright (c) 2008-2012, Christoph Gohlke
 # Copyright (c) 2008-2012, The Regents of the University of California
 # Produced at the Laboratory for Fluorescence Dynamics
