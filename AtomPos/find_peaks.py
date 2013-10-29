@@ -1,5 +1,10 @@
-# idea from http://stackoverflow.com/questions/9111711
-# (get-coordinates-of-local-maxima-in-2d-array-above-certain-value)
+"""
+  Interactive fitting of peaks in noisy 2D images.
+
+  Copyright (c) 2013, rhambach. 
+    This file is part of the FitAtomPos package and released
+    under the MIT-Licence. See LICENCE file for details.
+"""
 import numpy as np
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
@@ -115,7 +120,11 @@ class FindCenters(pb.PointBrowser):
 
 
   def find_local_maxima(self, data, neighborhood_size):
-    " find local maxima within neighborhood "
+    """ 
+     find local maxima within neighborhood 
+      idea from http://stackoverflow.com/questions/9111711
+      (get-coordinates-of-local-maxima-in-2d-array-above-certain-value)
+    """
 
     # find local maxima in image (width specified by neighborhood_size)
     data_max = filters.maximum_filter(data,neighborhood_size);
