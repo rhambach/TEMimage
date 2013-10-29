@@ -1,22 +1,14 @@
 """
-     Simple GUI for manually specifying points on a 2D image
+  Simple GUI for manually specifying points on a 2D image
 
-   VERSION
-     $Id: point_browser.py 15 2011-12-13 22:20:48Z hambach $
+  USAGE
+    An example can be found at the end of this file and can be executed
+    using 'python point_browser.py'
 
-   USAGE
-     An example can be found at the end of this file and can be executed
-     using 'python point_browser.py'
-
-   COPYRIGHT
-     Copyright (c) 2011, Ralf Hambach. All rights reserved.
-     Use of this source code is governed by a BSD-style license that 
-     can be found in the LICENSE file.
+  Copyright (c) 2013, rhambach. 
+    This file is part of the FitAtomPos package and released
+    under the MIT-Licence. See LICENCE file for details.
 """
-__version__ = "$Revision: 15 $"
-__author__ = "Ralf Hambach"
-__date__ = "$Date: 2011-12-13 23:20:48 +0100 (Tue, 13 Dec 2011) $"
-
 import numpy as np
 import matplotlib.pylab as plt
 from matplotlib.widgets import Button, RadioButtons

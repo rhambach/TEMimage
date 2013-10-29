@@ -1,24 +1,15 @@
 """
-   Tiling of 2D space and its dual graph (Delaunay triangulation
-    and Voronoi diagram)
+  Tiling of 2D space and its dual graph (Delaunay triangulation
+  and Voronoi diagram)
 
-   VERSION
-     $Id: tiling.py 17 2011-12-14 15:25:59Z hambach $
-
-   USAGE
-     An example can be found at the end of this file and can be executed
+  USAGE
+    An example can be found at the end of this file and can be executed
      using 'python tiling.py'
 
-   COPYRIGHT
-     Copyright (c) 2011, Ralf Hambach. All rights reserved.
-     Use of this source code is governed by a BSD-style license that 
-     can be found in the LICENSE file.
+  Copyright (c) 2013, rhambach. 
+    This file is part of the FitAtomPos package and released
+    under the MIT-Licence. See LICENCE file for details.
 """
-__version__ = "$Revision: 17 $"
-__author__ = "Ralf Hambach"
-__date__ = "$Date: 2011-12-14 16:25:59 +0100 (Wed, 14 Dec 2011) $"
-
-
 import numpy as np;
 import matplotlib.pylab as plt
 import matplotlib.collections as c;
@@ -172,7 +163,8 @@ class Tiling:
 
     tileN=[ [[None,None]] for i in range(N+1) ];
     for v in self.vertices:
-      tileN[len(v)].extend(self.points[v].tolist()+[[None,None]]);
+      if len(v)>0:
+        tileN[len(v)].extend(self.points[v].tolist()+[[None,None]]);
 
     # plot tiles
     for n in nvertices:
