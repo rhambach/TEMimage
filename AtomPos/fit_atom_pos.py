@@ -1,39 +1,35 @@
 # fitting atomic positions in Fourier Filtered TEM Image
 #
 # 1. Fourier Filtering
-# 2. Peak Fitting using HyperSpy
+# 2. Peak Fitting
 # 3. Delaunay Triangulation 
 # 4. Generate Atom Positions from Dual Graph
 
 import numpy as np
-import hyperspy;
-from hyperspy.hspy          import load
-from hyperspy.peak_char     import two_dim_findpeaks
+import tifffile as tiff
 import point_browser as pb
+from find_peaks import FindCenters
 from tiling import *
 
-def fit_peaks(data, xperchan=1, yperchan=1):
-  " use hyperspy for finding centers of hexagons in image "
-
-  # normalize data to [0,1000] (for two_dim_findpeaks)
-  data=np.nan_to_num(data);
-  data-=np.min(data);
-  data*=1000/np.max(data);
-
-  # peak fitting
-  peaks=two_dim_findpeaks(data.T,peak_width=10);
-  return peaks[:,0:2], peaks[:,2]; # centers, heights
-
+def __add_info_text(ImageBrowser):
+  " info about features of next-button"
+  ax   = ImageBrowser.bNext.ax;
+  text = "(use left/middle/right\n"+\
+         "mouse button for\n"+\
+         "preview/atoms/edges)";
+  ax.text(-0.2, 1.5, text, fontsize=8, color='gray',
+          transform=ax.transAxes);
 
 def triangulation(PointBrowser, event):
   " raise LineBrowser to modify triangulation "
- 
+  if event.button<>1: return;
   # Delaunay-triangulation
   T=Tiling(PointBrowser.points); 
   # manually edit edges
-  pb.TilingBrowser(INRAW.data,T,PointBrowser.imginfo,fnext=calc_dual);
+  TB=pb.TilingBrowser(INRAW,T,PointBrowser.imginfo,fnext=calc_dual);
+  __add_info_text(TB);
+  
   plt.show();
-
 
 def calc_dual(TilingBrowser,event):
   """
@@ -46,11 +42,12 @@ def calc_dual(TilingBrowser,event):
   info['desc']+=", dual points";
   # open different windows depending on mouse button
   if event.button==1:
-    PBimage=pb.ImageBrowser(INRAW.data,info);
+    PBimage=pb.ImageBrowser(INRAW,info);
   elif event.button==2:
-    PBimage=pb.PointBrowser(INRAW.data,dual.points,info,fnext=triangulation);
+    PBimage=pb.PointBrowser(INRAW,dual.points,info,fnext=triangulation);
   if event.button==3:
-    PBimage=pb.TilingBrowser(INRAW.data,dual,info,fnext=calc_dual);
+    PBimage=pb.TilingBrowser(INRAW,dual,info,fnext=calc_dual);
+    __add_info_text(PBimage);
   else:
     ax=dual.plot_edges(PBimage.axis,fc='darkgray');
     dual.plot_tiles(ax,nvertices=[5],fc='green',alpha=0.3);
@@ -65,29 +62,16 @@ def calc_dual(TilingBrowser,event):
 
 
 # read files (TODO: perform Fourier filter automatically)
-#infile="tests/graphene_flower_filtered.dm3";
-#rawfile="tests/graphene_flower_raw.dm3";
-infile="/home/hambach/arbeit/ulm/data/share/salve/111120_Graphene/HRTEM/graphene_flower_filter.dm3";
-rawfile="/home/hambach/arbeit/ulm/data/share/salve/111120_Graphene/HRTEM/graphene_flower_raw.dm3";
-IN = load(infile);
-INRAW=load(rawfile);
+infile="tests/graphene_flower_filtered.tif";
+rawfile="tests/graphene_flower_raw.tif";
+IN   =tiff.imread(infile);
+INRAW=tiff.imread(rawfile);
 
-# image parameters
-a=IN.axes_manager.axes; 
-info = { 'desc':     IN.mapped_parameters.title,
+# image parameters (TODO: read scale from Tiff?)
+info = { 'desc':     infile.split('/')[-1],
          'filename': infile,
-         'xperchan': a[0].scale,
-         'yperchan': a[1].scale,
-         'xunit'   : a[0].units,
-         'yunit'   : a[1].units,
          'atoms'   : 'C' };
 
 # fit + convert peak positions from px -> unit
-centers, heights = fit_peaks(IN.data);
-centers *= [info['xperchan'], info['yperchan']];
-
-# manually edit center positions
-PBcenter=pb.PointBrowser(IN.data,centers,info,fnext=triangulation);
-
-
+FC = FindCenters(IN,imginfo=info,verbosity=3,fnext=triangulation);
 plt.show();
