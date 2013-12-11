@@ -6,7 +6,7 @@
     4. Generate Atom Positions from Dual Graph
 
   Copyright (c) 2013, rhambach. 
-    This file is part of the FitAtomPos package and released
+    This file is part of the TEMimage package and released
     under the MIT-Licence. See LICENCE file for details.
 """
 import numpy as np
