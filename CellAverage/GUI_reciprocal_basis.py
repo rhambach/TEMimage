@@ -150,7 +150,7 @@ class BasisSelector():
 if __name__ == '__main__':
   import tifffile as tiff
 
-  filename="data/23_TiO2_0eV_ausschnitt_bin2.tif";
+  filename="tests/TiO2_0eV.tif";
   img =tiff.imread(filename);
   diff= np.fft.fftshift(np.fft.fft2(img));
   info={'xlabel': 'y','ylabel': 'x'};
