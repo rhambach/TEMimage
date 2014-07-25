@@ -19,14 +19,28 @@ class Tiling:
     Represents an tiling of the 2D space. By default, a Delaunay 
     triangulation is used to construct a tiling from the given points. 
     Alternatively, you can specify tiles and neighbors explicitly.
+
+    NOTE:
+    The tiling can be understood as a graph with points and edges 
+    connecting these points. Alternatively, we can consider the dual
+    of this graph by putting a point in the middle of each tile and 
+    drawing an edge between all neighboring tiles. We use the following
+    attributes for these two equivalent representations:
+
+    Graph:      points, edges
+    Dual Graph: vertices (specify a tile/simplex), neighbors
+
+    Given a set of points in 2D, the Delauny triangulation of scipy 
+    returns the Dual graph, i.e., a list of vertices for each tile, 
+    and a list of neighbors for each tile.
   """
 
   def __init__(self,points,vertices=None,neighbors=None,edges=None):
     """
-      points   ... array(npoints,dim) for the vertices in the tiling
-      vertices ... (opt) list(ntiles) of vertices for each tile
+      points   ... array(npoints,dim) coordinates for the vertices in the graph
+      vertices ... (opt) list(ntiles) of vertices for each tile 
       neighbors... (opt) list(ntiles) of neighbors for each tile
-      edges    ... (opt) list(nedges) of all edges
+      edges    ... (opt) list(nedges) of all edges in the graph
     """
     # points
     self.points = np.asarray(points,dtype=float);
@@ -41,7 +55,10 @@ class Tiling:
     else:  # Delaunay triangulation
       from scipy.spatial import Delaunay;
       tri = Delaunay(points);
-      self.vertices = tri.vertices.tolist();
+      # Note: 27/07/14
+      # tri.vertices deprecated in scipy v0.12.0, use tri.simplices instead
+      # from v.0.14.0 points are sorted counterclockwise
+      self.vertices = tri.vertices.tolist();  
       self.neighbors= tri.neighbors.tolist();
       self.edges = [];
       for v in self.vertices:
@@ -59,6 +76,8 @@ class Tiling:
     delta=p-np.mean(p,axis=0);   # vectors from mass center to each vertex point
                                  # sort using angle to x-axis
     return np.asarray(vertices)[ np.argsort(np.arctan2(*tuple(delta.T))) ];
+                                 # arctan2 expects y,x as argument, 
+                                 # we give x,y, i.e., angle is increasing clockwise
 
   def get_edges_of_tile(self,sorted_vertices):
     " return list(nedges,2) of point indices for edges of a tile"
@@ -68,8 +87,11 @@ class Tiling:
 
   def get_dual(self):
     """ 
-     return the dual graph of the tiling, which is constructed
-      by mapping tile -> point of mass, points -> tiles
+     return the dual graph of the tiling, which is constructed by mapping
+        vertices (tile) -> points (center of mass)
+        neigbors        -> edges (connecting neighboring tiles)
+        points          -> tiles 
+        edges           -> neighbors
     """
     dpoints = []; dedges = []; 
     dneighbors = [[] for i in range(self.npoints)];
